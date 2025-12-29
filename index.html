@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Home Care PT Search Tool</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main class="page">
+      <header class="hero">
+        <div class="hero-copy">
+          <span class="badge">City Rehab</span>
+          <h1>Home Care PT Finder</h1>
+          <p>
+            Search by zip code, insurance, and timing to find the best available
+            provider for each caller.
+          </p>
+        </div>
+        <div class="hero-status" id="dataStatus">Loading sheet data...</div>
+      </header>
+
+      <section class="card filters">
+        <form id="searchForm" class="filter-grid" autocomplete="off">
+          <label class="field">
+            <span>Zip code</span>
+            <input
+              id="zipInput"
+              name="zip"
+              type="text"
+              inputmode="numeric"
+              maxlength="5"
+              placeholder="write 5 digit zip code"
+            />
+          </label>
+
+          <label class="field">
+            <span>Insurance</span>
+            <input
+              id="insuranceInput"
+              name="insurance"
+              type="text"
+              list="insuranceOptions"
+              placeholder="Type or choose insurance"
+            />
+            <datalist id="insuranceOptions"></datalist>
+          </label>
+
+          <label class="field">
+            <span>Visit type</span>
+            <select id="visitTypeSelect" name="visitType">
+              <option value="">Any type</option>
+              <option value="initial evaluation">Initial evaluation</option>
+              <option value="follow up">Follow up</option>
+            </select>
+          </label>
+
+          <div class="field">
+            <span>Days of week</span>
+            <div id="dayOptions" class="checkbox-list">
+              <label class="checkbox-option">
+                <input type="checkbox" name="day" value="Mon" />
+                <span>Monday</span>
+              </label>
+              <label class="checkbox-option">
+                <input type="checkbox" name="day" value="Tue" />
+                <span>Tuesday</span>
+              </label>
+              <label class="checkbox-option">
+                <input type="checkbox" name="day" value="Wed" />
+                <span>Wednesday</span>
+              </label>
+              <label class="checkbox-option">
+                <input type="checkbox" name="day" value="Thu" />
+                <span>Thursday</span>
+              </label>
+              <label class="checkbox-option">
+                <input type="checkbox" name="day" value="Fri" />
+                <span>Friday</span>
+              </label>
+              <label class="checkbox-option">
+                <input type="checkbox" name="day" value="Sat" />
+                <span>Saturday</span>
+              </label>
+              <label class="checkbox-option">
+                <input type="checkbox" name="day" value="Sun" />
+                <span>Sunday</span>
+              </label>
+            </div>
+            <small class="helper">Leave unchecked for any day.</small>
+          </div>
+
+          <label class="field">
+            <span>Time</span>
+            <input id="timeInput" name="time" type="time" />
+          </label>
+
+          <label class="field">
+            <span>Next available</span>
+            <select id="nextAvailableSelect" name="nextAvailable">
+              <option value="">Any time</option>
+              <option value="3">Within 3 days</option>
+              <option value="7">Within 7 days</option>
+              <option value="14">Within 14 days</option>
+            </select>
+          </label>
+
+          <div class="field actions">
+            <button class="primary" type="submit">Search</button>
+            <button class="ghost" type="button" id="resetButton">Reset</button>
+          </div>
+        </form>
+
+        <div class="filter-meta">
+          <div class="hint">
+            Tip: start typing to search the insurance list.
+          </div>
+          <div class="meta" id="dataMeta"></div>
+        </div>
+      </section>
+
+      <section class="card results">
+        <div class="results-header">
+          <div>
+            <h2>Matches</h2>
+            <p class="subtext" id="resultsSubtext">
+              Showing PTs who match zip, insurance, and requested timing.
+            </p>
+          </div>
+          <div class="results-count" id="resultsCount">0 matches</div>
+        </div>
+        <div id="results" class="results-grid"></div>
+        <div id="emptyState" class="empty-state" hidden>
+          No matches yet. Adjust filters or check that the zip and insurance are
+          in the sheet.
+        </div>
+      </section>
+
+      <footer class="footer">
+        Powered by the Search Tool Google Sheet.
+      </footer>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+    <script src="app.js" defer></script>
+  </body>
+</html>
