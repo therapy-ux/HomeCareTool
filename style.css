@@ -131,6 +131,18 @@ body {
   background: #fff7f2;
 }
 
+.info-box {
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  padding: 0.7rem 0.8rem;
+  font-size: 1rem;
+  color: var(--muted);
+  background: #fff7f2;
+  min-height: 2.6rem;
+  display: flex;
+  align-items: center;
+}
+
 .checkbox-list {
   display: grid;
   gap: 0.5rem;
