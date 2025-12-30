@@ -28,6 +28,7 @@ const FIELD_ALIASES = {
   bookingDate: ["visit_date", "visit date", "date"],
   bookingTime: ["visit_time", "visit time", "time"],
   bookingStatus: ["status", "visit status", "booking status"],
+  bookingArea: ["area", "visit_area", "booking_area", "region", "borough"],
   unavailStartDate: ["start_date", "start date", "from", "begin date"],
   unavailEndDate: ["end_date", "end date", "to", "until"],
   unavailStartTime: ["start_time", "start time", "from time"],
@@ -69,6 +70,7 @@ const DAY_LABELS = {
   Sat: "Saturday",
   Sun: "Sunday",
 };
+const TRAVEL_BUFFER_MINUTES = 60;
 
 const CORS_PROXIES = ["https://corsproxy.io/?", "https://cors.isomorphic-git.org/"];
 const SHOULD_PREFER_PROXY =
@@ -342,6 +344,7 @@ function buildPts(
       availability: [],
       unavailability: [],
       bookingBlocks: [],
+      bookings: [],
       weeklyBooked: 0,
       maxInsuranceRate: null,
     };
@@ -433,12 +436,22 @@ function buildPts(
     if (!isCountedBookingStatus(status)) return;
 
     const timeMinutes = parseTimeToMinutes(getField(row, "bookingTime"));
+    const area = String(getField(row, "bookingArea") || "").trim();
+    const dayCode = getDayCode(visitDate);
     pt.bookingBlocks.push({
       startDate: visitDate,
       endDate: visitDate,
       startMinutes: timeMinutes,
       endMinutes: timeMinutes,
       reason: status || "booked",
+      area,
+    });
+    pt.bookings.push({
+      date: visitDate,
+      day: dayCode,
+      timeMinutes,
+      area,
+      status,
     });
 
     if (visitDate >= weekBounds.start && visitDate < weekBounds.end) {
@@ -726,6 +739,10 @@ function buildCopySummary(pt, meta) {
   if (nextSlot) {
     lines.push(`Next available: ${formatNextSlot(nextSlot)}`);
   }
+  const bookingSummary = getBookingSummary(pt, state.filters, TRAVEL_BUFFER_MINUTES);
+  if (bookingSummary.lines.length) {
+    lines.push(`Bookings on selected days: ${bookingSummary.lines.join(" | ")}`);
+  }
 
   if (meta?.nextDay) {
     const offsetText = meta.offset
@@ -909,6 +926,7 @@ function findNearestSlot(
 }
 
 function renderPtCard(pt, index, meta) {
+  const bookingSummary = getBookingSummary(pt, state.filters, TRAVEL_BUFFER_MINUTES);
   const tags = [];
   if (pt.active) {
     tags.push({ label: "Active", className: "tag alt" });
@@ -935,6 +953,13 @@ function renderPtCard(pt, index, meta) {
     tags.push({
       label: `Visit: ${formatVisitLabel(state.filters.visitType)}`,
       className: "tag alt",
+    });
+  }
+
+  if (bookingSummary.count) {
+    tags.push({
+      label: `Booked: ${bookingSummary.count}`,
+      className: "tag muted",
     });
   }
 
@@ -993,10 +1018,6 @@ function renderPtCard(pt, index, meta) {
       label: "Weekly capacity",
       value: escapeHtml(capacityLabel),
     },
-    {
-      label: "Availability",
-      value: escapeHtml(availability),
-    },
   ];
 
   if (nextSlot) {
@@ -1005,6 +1026,18 @@ function renderPtCard(pt, index, meta) {
       value: escapeHtml(formatNextSlot(nextSlot)),
     });
   }
+
+  if (bookingSummary.lines.length) {
+    bodyItems.splice(8, 0, {
+      label: "Bookings on selected days",
+      value: escapeHtml(bookingSummary.lines.join(" | ")),
+    });
+  }
+
+  bodyItems.push({
+    label: "Availability",
+    value: escapeHtml(availability),
+  });
 
   if (pt.notes) {
     bodyItems.push({
@@ -1143,6 +1176,64 @@ function formatNextSlot(nextSlot) {
   const dateLabel = nextSlot.date.toLocaleDateString();
   const timeLabel = `${nextSlot.slot.startTime}-${nextSlot.slot.endTime}`;
   return `${dayLabel} ${dateLabel} (${timeLabel})`;
+}
+
+function getBookingSummary(pt, filters, bufferMinutes) {
+  const selectedDays = sortDays(filters?.days || []);
+  if (!selectedDays.length) return { count: 0, lines: [] };
+
+  const bookings = Array.isArray(pt.bookings) ? pt.bookings : [];
+  if (!bookings.length) return { count: 0, lines: [] };
+
+  const timeMinutes = filters?.time ? parseTimeToMinutes(filters.time) : null;
+  const buffer = Number.isFinite(bufferMinutes) ? bufferMinutes : 60;
+  const bookingsByDay = new Map();
+
+  bookings.forEach((booking) => {
+    if (!booking || !booking.day) return;
+    if (!selectedDays.includes(booking.day)) return;
+    const list = bookingsByDay.get(booking.day) || [];
+    list.push(booking);
+    bookingsByDay.set(booking.day, list);
+  });
+
+  const lines = [];
+  let count = 0;
+
+  selectedDays.forEach((day) => {
+    const list = bookingsByDay.get(day);
+    if (!list || !list.length) return;
+    list.sort((a, b) => {
+      const timeA = Number.isFinite(a.timeMinutes) ? a.timeMinutes : Infinity;
+      const timeB = Number.isFinite(b.timeMinutes) ? b.timeMinutes : Infinity;
+      if (timeA !== timeB) return timeA - timeB;
+      const areaA = String(a.area || "");
+      const areaB = String(b.area || "");
+      return areaA.localeCompare(areaB);
+    });
+    count += list.length;
+    const entries = list.map((booking) => {
+      const areaLabel = booking.area ? booking.area : "Area unknown";
+      const timeLabel = Number.isFinite(booking.timeMinutes)
+        ? minutesToTime(booking.timeMinutes)
+        : "time TBD";
+      let entry = `${areaLabel} @ ${timeLabel}`;
+      if (timeMinutes !== null) {
+        if (Number.isFinite(booking.timeMinutes)) {
+          const diff = Math.abs(timeMinutes - booking.timeMinutes);
+          if (diff < buffer) {
+            entry += ` (buffer < ${buffer}m)`;
+          }
+        } else {
+          entry += " (time unknown)";
+        }
+      }
+      return entry;
+    });
+    lines.push(`${formatDayLabel(day)}: ${entries.join(", ")}`);
+  });
+
+  return { count, lines };
 }
 
 function formatAvailability(pt, dayOverride) {
