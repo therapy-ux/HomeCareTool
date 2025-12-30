@@ -18,6 +18,7 @@ const FIELD_ALIASES = {
   ptRate: ["pt_rate", "pt rate", "rate"],
   maxWeeklyVisits: ["max_weekly_visits", "max weekly visits", "weekly capacity"],
   zip: ["zip_code", "zip", "postal code"],
+  zipArea: ["area", "zone", "territory"],
   insurance: ["insurance_name", "insurance", "payer"],
   insuranceRate: ["insurance_rate", "insurance rate", "rate"],
   dayOfWeek: ["day_of_week", "day", "weekday"],
@@ -76,6 +77,7 @@ const SHOULD_PREFER_PROXY =
 const state = {
   pts: [],
   insuranceOptions: [],
+  zipAreas: new Map(),
   lastUpdated: null,
   renderMetaById: new Map(),
   renderMode: "exact",
@@ -98,6 +100,7 @@ const elements = {
   emptyState: document.getElementById("emptyState"),
   form: document.getElementById("searchForm"),
   zipInput: document.getElementById("zipInput"),
+  zipAreaBox: document.getElementById("zipAreaBox"),
   insuranceInput: document.getElementById("insuranceInput"),
   insuranceOptions: document.getElementById("insuranceOptions"),
   visitTypeSelect: document.getElementById("visitTypeSelect"),
@@ -216,9 +219,11 @@ async function loadAllData() {
       bookingRows
     );
     state.insuranceOptions = buildInsuranceOptions(state.pts);
+    state.zipAreas = buildZipAreas(zipRows);
     state.lastUpdated = new Date();
 
     populateInsuranceDatalist();
+    updateZipAreaDisplay();
     updateMeta();
     setStatus(`Loaded ${state.pts.length} PTs`);
     renderResults();
@@ -460,12 +465,42 @@ function buildInsuranceOptions(pts) {
   return Array.from(options).sort((a, b) => a.localeCompare(b));
 }
 
+function buildZipAreas(zipRows) {
+  const map = new Map();
+  zipRows.forEach((row) => {
+    const zip = normalizeZip(getField(row, "zip"));
+    if (!zip) return;
+    const area = String(getField(row, "zipArea") || "").trim();
+    if (!area) return;
+    if (!map.has(zip)) {
+      map.set(zip, new Set());
+    }
+    map.get(zip).add(area);
+  });
+  return map;
+}
+
 function populateInsuranceDatalist() {
   if (!elements.insuranceOptions) return;
   const optionsHtml = state.insuranceOptions
     .map((name) => `<option value="${escapeHtml(name)}"></option>`)
     .join("");
   elements.insuranceOptions.innerHTML = optionsHtml;
+}
+
+function updateZipAreaDisplay() {
+  if (!elements.zipAreaBox) return;
+  const zip = normalizeZip(elements.zipInput?.value || "");
+  if (!zip) {
+    elements.zipAreaBox.textContent = "—";
+    return;
+  }
+  const areas = state.zipAreas.get(zip);
+  if (!areas || !areas.size) {
+    elements.zipAreaBox.textContent = "Area not found";
+    return;
+  }
+  elements.zipAreaBox.textContent = Array.from(areas).sort().join(", ");
 }
 
 function updateMeta() {
@@ -491,6 +526,7 @@ function updateFiltersFromForm() {
     days: getSelectedDays(),
     time: elements.timeInput?.value || "",
   };
+  updateZipAreaDisplay();
 }
 
 function renderResults() {
