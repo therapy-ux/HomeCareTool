@@ -18,6 +18,7 @@ const FIELD_ALIASES = {
   ptRate: ["pt_rate", "pt rate", "rate"],
   maxWeeklyVisits: ["max_weekly_visits", "max weekly visits", "weekly capacity"],
   zip: ["zip_code", "zip", "postal code"],
+  zipDay: ["day_of_week", "day", "weekday", "coverage_day"],
   zipArea: ["area", "zone", "territory"],
   insurance: ["insurance_name", "insurance", "payer"],
   insuranceRate: ["insurance_rate", "insurance rate", "rate"],
@@ -340,6 +341,8 @@ function buildPts(
       ptRate: parseNumber(getField(row, "ptRate")),
       maxWeeklyVisits: parseNumber(getField(row, "maxWeeklyVisits")),
       zips: new Set(),
+      zipsAnyDay: new Set(),
+      zipsByDay: new Map(),
       insurances: [],
       availability: [],
       unavailability: [],
@@ -358,7 +361,15 @@ function buildPts(
     if (!id || !zip) return;
     const pt = ptsById.get(id);
     if (pt) {
+      const day = normalizeDay(getField(row, "zipDay"));
       pt.zips.add(zip);
+      if (day) {
+        const daySet = pt.zipsByDay.get(day) || new Set();
+        daySet.add(zip);
+        pt.zipsByDay.set(day, daySet);
+      } else {
+        pt.zipsAnyDay.add(zip);
+      }
     }
   });
 
@@ -628,7 +639,7 @@ function filterPts(pts, filters) {
   return pts.filter((pt) => {
     if (!pt.active) return false;
     if (!isEligibleRole(pt.role)) return false;
-    if (filters.zip && !pt.zips.has(filters.zip)) return false;
+    if (!matchesZipForFilters(pt, filters)) return false;
 
     if (shouldFilterInsurance) {
       const matches = pt.insurances.some((insurance) => {
@@ -657,10 +668,21 @@ function filterPts(pts, filters) {
   });
 }
 
+function matchesZipForFilters(pt, filters) {
+  if (!filters.zip) return true;
+  if (!pt.zips || !pt.zips.has(filters.zip)) return false;
+  const dayFilters = sortDays(filters.days || []);
+  if (!dayFilters.length) return true;
+  if (pt.zipsAnyDay?.has(filters.zip)) return true;
+  const dayMap = pt.zipsByDay;
+  if (!dayMap || dayMap.size === 0) return true;
+  return dayFilters.some((day) => dayMap.get(day)?.has(filters.zip));
+}
+
 function computeMatchScore(pt, filters, meta, mode) {
   let score = 0;
 
-  if (filters.zip && pt.zips.has(filters.zip)) {
+  if (filters.zip && matchesZipForFilters(pt, filters)) {
     score += 3;
   }
 
@@ -830,7 +852,7 @@ function findNearestMatches(pts, filters) {
   pts.forEach((pt) => {
     if (!pt.active) return;
     if (!isEligibleRole(pt.role)) return;
-    if (filters.zip && !pt.zips.has(filters.zip)) return;
+    if (!matchesZipForFilters(pt, filters)) return;
 
     if (shouldFilterInsurance) {
       const matchesInsurance = pt.insurances.some((insurance) => {
